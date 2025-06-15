@@ -15,8 +15,23 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, conversation, userMessage } = await req.json();
+    console.log('✅ Received request to speaking-practice function');
     
+    const { topic, conversation, userMessage } = await req.json();
+    console.log('📝 Topic:', topic);
+    console.log('📝 User message:', userMessage);
+    console.log('📝 Conversation length:', conversation ? conversation.length : 0);
+    
+    if (!geminiApiKey) {
+      console.log('🚨 Gemini API key not found');
+      return new Response(JSON.stringify({ 
+        error: 'AI service configuration error. Please contact support.' 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const conversationHistory = conversation || [];
     const prompt = `You are an English conversation partner helping a student practice speaking. 
 
@@ -37,7 +52,9 @@ Respond as a helpful English tutor. Keep your response:
 
 Response:`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
+    console.log('🚀 Making request to Gemini API...');
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -55,22 +72,75 @@ Response:`;
       }),
     });
 
+    console.log('📡 Gemini API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Gemini API error:', response.status, errorText);
+      
+      return new Response(JSON.stringify({ 
+        error: 'AI service temporarily unavailable. Please try again.',
+        details: `API responded with status: ${response.status}`
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const data = await response.json();
-    const aiResponse = data.candidates[0].content.parts[0].text.trim();
+    console.log('📊 Gemini API response structure:', JSON.stringify(data, null, 2));
+    
+    // Check if response has the expected structure
+    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error('❌ Unexpected Gemini API response structure:', data);
+      
+      return new Response(JSON.stringify({
+        error: 'Unable to generate response. Please try again.',
+        details: 'Invalid API response structure'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const aiResponseText = data.candidates[0]?.content?.parts?.[0]?.text;
+    
+    if (!aiResponseText) {
+      console.error('❌ No text content in Gemini response');
+      
+      return new Response(JSON.stringify({
+        error: 'No response generated. Please try again.',
+        details: 'Empty response content'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const aiResponse = aiResponseText.trim();
+    console.log('✅ AI response generated successfully');
+    console.log('📄 Response preview:', aiResponse.substring(0, 100) + '...');
+
+    const updatedConversation = [
+      ...conversationHistory,
+      { role: 'user', content: userMessage },
+      { role: 'assistant', content: aiResponse }
+    ];
 
     return new Response(JSON.stringify({ 
       response: aiResponse,
-      conversation: [
-        ...conversationHistory,
-        { role: 'user', content: userMessage },
-        { role: 'assistant', content: aiResponse }
-      ]
+      conversation: updatedConversation
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in speaking-practice function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('💥 Critical error in speaking-practice function:', error);
+    console.error('💥 Error stack:', error.stack);
+    
+    return new Response(JSON.stringify({ 
+      error: 'Service temporarily unavailable. Please try again.',
+      details: `System error: ${error.message}`
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
