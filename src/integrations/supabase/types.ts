@@ -9,7 +9,206 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      daily_activities: {
+        Row: {
+          activity_type: string
+          created_at: string | null
+          date: string | null
+          id: string
+          points_earned: number | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          points_earned?: number | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          points_earned?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          current_streak: number | null
+          email: string | null
+          id: string
+          level: number | null
+          total_points: number | null
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_streak?: number | null
+          email?: string | null
+          id: string
+          level?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_streak?: number | null
+          email?: string | null
+          id?: string
+          level?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      sentence_corrections: {
+        Row: {
+          corrected_sentence: string
+          created_at: string | null
+          errors: Json | null
+          explanation: string | null
+          id: string
+          original_sentence: string
+          score: number | null
+          user_id: string
+        }
+        Insert: {
+          corrected_sentence: string
+          created_at?: string | null
+          errors?: Json | null
+          explanation?: string | null
+          id?: string
+          original_sentence: string
+          score?: number | null
+          user_id: string
+        }
+        Update: {
+          corrected_sentence?: string
+          created_at?: string | null
+          errors?: Json | null
+          explanation?: string | null
+          id?: string
+          original_sentence?: string
+          score?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      speaking_sessions: {
+        Row: {
+          conversation: Json
+          created_at: string | null
+          feedback: string | null
+          id: string
+          score: number | null
+          topic: string
+          user_id: string
+        }
+        Insert: {
+          conversation: Json
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          score?: number | null
+          topic: string
+          user_id: string
+        }
+        Update: {
+          conversation?: Json
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          score?: number | null
+          topic?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_vocabulary: {
+        Row: {
+          created_at: string | null
+          id: string
+          learned: boolean | null
+          learned_at: string | null
+          user_id: string
+          word_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          learned?: boolean | null
+          learned_at?: string | null
+          user_id: string
+          word_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          learned?: boolean | null
+          learned_at?: string | null
+          user_id?: string
+          word_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_vocabulary_word_id_fkey"
+            columns: ["word_id"]
+            isOneToOne: false
+            referencedRelation: "vocabulary_words"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocabulary_words: {
+        Row: {
+          created_at: string | null
+          difficulty: string | null
+          example_sentence: string | null
+          hindi_meaning: string | null
+          id: string
+          meaning: string | null
+          part_of_speech: string | null
+          pronunciation: string | null
+          synonyms: string[] | null
+          usage_tip: string | null
+          word: string
+        }
+        Insert: {
+          created_at?: string | null
+          difficulty?: string | null
+          example_sentence?: string | null
+          hindi_meaning?: string | null
+          id?: string
+          meaning?: string | null
+          part_of_speech?: string | null
+          pronunciation?: string | null
+          synonyms?: string[] | null
+          usage_tip?: string | null
+          word: string
+        }
+        Update: {
+          created_at?: string | null
+          difficulty?: string | null
+          example_sentence?: string | null
+          hindi_meaning?: string | null
+          id?: string
+          meaning?: string | null
+          part_of_speech?: string | null
+          pronunciation?: string | null
+          synonyms?: string[] | null
+          usage_tip?: string | null
+          word?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
