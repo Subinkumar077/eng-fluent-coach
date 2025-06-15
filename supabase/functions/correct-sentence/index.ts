@@ -17,6 +17,20 @@ serve(async (req) => {
   try {
     const { sentence } = await req.json();
 
+    if (!sentence || sentence.trim().length === 0) {
+      return new Response(JSON.stringify({ error: 'Sentence is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!geminiApiKey) {
+      return new Response(JSON.stringify({ error: 'Gemini API key not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: {
@@ -25,7 +39,7 @@ serve(async (req) => {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `As an English grammar expert, analyze this sentence and provide corrections if needed. Return a JSON response with this exact structure:
+            text: `As an English grammar expert, analyze this sentence and provide corrections if needed. Return ONLY a valid JSON response with this exact structure:
 
 {
   "original": "${sentence}",
@@ -56,8 +70,52 @@ Sentence to analyze: "${sentence}"`
       }),
     });
 
+    if (!response.ok) {
+      console.error('Gemini API error:', response.status, response.statusText);
+      return new Response(JSON.stringify({ error: 'Failed to analyze sentence' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const data = await response.json();
-    let result = data.candidates[0].content.parts[0].text;
+    
+    // Check if response has the expected structure
+    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error('Unexpected Gemini API response structure:', data);
+      const fallbackResult = {
+        original: sentence,
+        corrected: sentence,
+        isCorrect: true,
+        explanation: "Unable to analyze sentence at this time.",
+        errors: [],
+        score: 50,
+        tips: ["Try again later"]
+      };
+      
+      return new Response(JSON.stringify(fallbackResult), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let result = data.candidates[0]?.content?.parts?.[0]?.text;
+    
+    if (!result) {
+      console.error('No text in Gemini response:', data);
+      const fallbackResult = {
+        original: sentence,
+        corrected: sentence,
+        isCorrect: true,
+        explanation: "Unable to analyze sentence at this time.",
+        errors: [],
+        score: 50,
+        tips: ["Try again later"]
+      };
+      
+      return new Response(JSON.stringify(fallbackResult), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // Clean up the response to extract JSON
     result = result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -68,6 +126,7 @@ Sentence to analyze: "${sentence}"`
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (parseError) {
+      console.error('JSON parsing error:', parseError, 'Raw result:', result);
       // Fallback if JSON parsing fails
       const fallbackResult = {
         original: sentence,
@@ -85,7 +144,7 @@ Sentence to analyze: "${sentence}"`
     }
   } catch (error) {
     console.error('Error in correct-sentence function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
