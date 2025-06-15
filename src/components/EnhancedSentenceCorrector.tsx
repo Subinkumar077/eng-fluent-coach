@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, XCircle, Lightbulb, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Lightbulb, BookOpen, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -53,6 +53,7 @@ const EnhancedSentenceCorrector = () => {
 
     setLoading(true);
     setError(null);
+    setResult(null);
     
     try {
       console.log('Sending sentence for correction:', sentence);
@@ -66,15 +67,17 @@ const EnhancedSentenceCorrector = () => {
 
       if (functionError) {
         console.error('Supabase function error:', functionError);
-        throw new Error('Failed to connect to the correction service. Please try again.');
+        throw new Error('Connection to AI service failed. Please check your internet connection and try again.');
       }
 
       if (data && data.error) {
+        console.error('Function returned error:', data.error);
         throw new Error(data.error);
       }
 
       if (!data || !data.original) {
-        throw new Error('Invalid response from correction service. Please try again.');
+        console.error('Invalid response from function:', data);
+        throw new Error('Invalid response from AI service. Please try again.');
       }
 
       setResult(data);
@@ -93,7 +96,6 @@ const EnhancedSentenceCorrector = () => {
 
         if (dbError) {
           console.error('Database error:', dbError);
-          // Don't throw here, just log the error
         }
 
         // Add daily activity points
@@ -106,7 +108,6 @@ const EnhancedSentenceCorrector = () => {
 
         if (activityError && activityError.code !== '23505') {
           console.error('Activity tracking error:', activityError);
-          // Don't throw here, just log the error
         }
 
         toast({
@@ -115,12 +116,11 @@ const EnhancedSentenceCorrector = () => {
         });
       } catch (dbError) {
         console.error('Database operation failed:', dbError);
-        // Don't prevent the user from seeing results even if DB operations fail
       }
 
     } catch (error: any) {
       console.error('Error in sentence correction:', error);
-      const errorMessage = error.message || "Failed to analyze sentence. Please try again.";
+      const errorMessage = error.message || "AI service is temporarily unavailable. Please try again in a moment.";
       setError(errorMessage);
       
       toast({
@@ -158,20 +158,32 @@ const EnhancedSentenceCorrector = () => {
             placeholder="Type your sentence here... (e.g., 'I am go to the store yesterday')"
             className="min-h-[100px] dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
           />
-          <Button
-            onClick={correctSentence}
-            disabled={loading || !sentence.trim() || !user}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              'Check My Sentence'
+          <div className="flex gap-2">
+            <Button
+              onClick={correctSentence}
+              disabled={loading || !sentence.trim() || !user}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                'Check My Sentence'
+              )}
+            </Button>
+            {error && (
+              <Button
+                onClick={correctSentence}
+                variant="outline"
+                disabled={loading || !sentence.trim() || !user}
+                className="dark:border-gray-600"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
             )}
-          </Button>
+          </div>
           
           {!user && (
             <Alert>
@@ -186,7 +198,17 @@ const EnhancedSentenceCorrector = () => {
         {error && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {error}
+              <div className="mt-2 text-sm">
+                If this problem persists, please try:
+                <ul className="list-disc list-inside mt-1">
+                  <li>Checking your internet connection</li>
+                  <li>Refreshing the page</li>
+                  <li>Trying again in a few minutes</li>
+                </ul>
+              </div>
+            </AlertDescription>
           </Alert>
         )}
 
