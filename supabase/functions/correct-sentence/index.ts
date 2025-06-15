@@ -28,6 +28,8 @@ serve(async (req) => {
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     console.log('🔑 Gemini API key status:', geminiApiKey ? 'Found' : 'Missing');
+    console.log('🔑 API key length:', geminiApiKey ? geminiApiKey.length : 0);
+    console.log('🔑 API key prefix:', geminiApiKey ? geminiApiKey.substring(0, 10) + '...' : 'N/A');
 
     if (!geminiApiKey) {
       console.log('🚨 Gemini API key not found in environment');
@@ -67,35 +69,60 @@ Respond with ONLY a valid JSON object in this exact format:
 
 If the sentence is perfect, set isCorrect to true and errors to an empty array.`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`;
+    console.log('🌐 Request URL (without key):', geminiUrl.replace(geminiApiKey, '[API_KEY]'));
+
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048,
+      },
+    };
+
+    console.log('📦 Request body:', JSON.stringify(requestBody, null, 2));
+
+    const response = await fetch(geminiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          topK: 1,
-          topP: 1,
-          maxOutputTokens: 2048,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log('📡 Gemini API response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Gemini API error:', response.status, errorText);
       
+      // Parse error details if possible
+      let errorMessage = 'AI analysis temporarily unavailable. Please try again in a moment.';
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error && errorData.error.message) {
+          console.error('🔍 Detailed error:', errorData.error.message);
+          if (errorData.error.message.includes('API key')) {
+            errorMessage = 'Invalid API key configuration. Please check your Gemini API key.';
+          } else if (errorData.error.message.includes('quota')) {
+            errorMessage = 'API quota exceeded. Please try again later.';
+          }
+        }
+      } catch (parseError) {
+        console.error('❌ Could not parse error response:', parseError);
+      }
+      
       return new Response(JSON.stringify({ 
-        error: 'AI analysis temporarily unavailable. Please try again in a moment.',
-        details: `API responded with status: ${response.status}`
+        error: errorMessage,
+        details: `API responded with status: ${response.status}`,
+        geminiError: errorText
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,7 +158,7 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
       });
     }
     
-    console.log('📄 Raw result text:', resultText.substring(0, 200) + '...');
+    console.log('📄 Raw result text:', resultText.substring(0, 500) + '...');
     
     // Clean up the response to extract JSON
     resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -145,6 +172,7 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
     }
     
     console.log('🧹 Cleaned result text length:', resultText.length);
+    console.log('🧹 Cleaned result preview:', resultText.substring(0, 200) + '...');
     
     try {
       const parsedResult = JSON.parse(resultText);
@@ -179,6 +207,7 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
     }
   } catch (error) {
     console.error('💥 Critical error in correct-sentence function:', error);
+    console.error('💥 Error stack:', error.stack);
     
     return new Response(JSON.stringify({
       error: 'Service temporarily unavailable. Please try again.',
