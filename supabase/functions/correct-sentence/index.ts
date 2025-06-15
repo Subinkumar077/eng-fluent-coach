@@ -13,13 +13,13 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Received request to correct-sentence function');
+    console.log('✅ Received request to correct-sentence function');
     
     const { sentence } = await req.json();
-    console.log('Input sentence:', sentence);
+    console.log('📝 Input sentence:', sentence);
 
     if (!sentence || sentence.trim().length === 0) {
-      console.log('No sentence provided');
+      console.log('❌ No sentence provided');
       return new Response(JSON.stringify({ error: 'Sentence is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -27,22 +27,22 @@ serve(async (req) => {
     }
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    console.log('Gemini API key exists:', !!geminiApiKey);
+    console.log('🔑 Gemini API key status:', geminiApiKey ? 'Found' : 'Missing');
 
     if (!geminiApiKey) {
-      console.log('Gemini API key not found in environment');
+      console.log('🚨 Gemini API key not found in environment');
       return new Response(JSON.stringify({ 
-        error: 'AI service temporarily unavailable. Please try again later.',
-        details: 'API configuration issue'
+        error: 'AI service configuration error. Please contact support.',
+        details: 'API key not configured'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Making request to Gemini API...');
+    console.log('🚀 Making request to Gemini API...');
     
-    const prompt = `You are an expert English teacher. Please analyze this sentence and provide corrections if needed.
+    const prompt = `You are an expert English teacher. Analyze this sentence and provide corrections if needed.
 
 Sentence: "${sentence}"
 
@@ -87,15 +87,15 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
       }),
     });
 
-    console.log('Gemini API response status:', response.status);
+    console.log('📡 Gemini API response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
+      console.error('❌ Gemini API error:', response.status, errorText);
       
       return new Response(JSON.stringify({ 
-        error: 'AI analysis failed. Please try again.',
-        details: `API error: ${response.status}`
+        error: 'AI analysis temporarily unavailable. Please try again in a moment.',
+        details: `API responded with status: ${response.status}`
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -103,14 +103,14 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
     }
 
     const data = await response.json();
-    console.log('Gemini API response received, processing...');
+    console.log('📊 Gemini API response structure:', JSON.stringify(data, null, 2));
     
     if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-      console.error('Unexpected Gemini API response structure:', data);
+      console.error('❌ Unexpected Gemini API response structure:', data);
       
       return new Response(JSON.stringify({
-        error: 'Unable to analyze sentence at this time.',
-        details: 'Invalid API response'
+        error: 'Unable to analyze sentence. Please try again.',
+        details: 'Invalid API response structure'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -120,18 +120,18 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
     let resultText = data.candidates[0]?.content?.parts?.[0]?.text;
     
     if (!resultText) {
-      console.error('No text in Gemini response');
+      console.error('❌ No text content in Gemini response');
       
       return new Response(JSON.stringify({
-        error: 'No analysis received from AI service.',
-        details: 'Empty response'
+        error: 'No analysis received. Please try again.',
+        details: 'Empty response content'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
-    console.log('Raw result text length:', resultText.length);
+    console.log('📄 Raw result text:', resultText.substring(0, 200) + '...');
     
     // Clean up the response to extract JSON
     resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -144,32 +144,33 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
       resultText = resultText.substring(firstBrace, lastBrace + 1);
     }
     
-    console.log('Cleaned result text length:', resultText.length);
+    console.log('🧹 Cleaned result text length:', resultText.length);
     
     try {
       const parsedResult = JSON.parse(resultText);
-      console.log('Successfully parsed result');
+      console.log('✅ Successfully parsed JSON result');
       
       // Validate the result has required fields
       if (!parsedResult.original || !parsedResult.corrected) {
-        throw new Error('Missing required fields in response');
+        throw new Error('Missing required fields in AI response');
       }
       
       return new Response(JSON.stringify(parsedResult), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (parseError) {
-      console.error('JSON parsing error:', parseError, 'Raw result:', resultText);
+      console.error('❌ JSON parsing error:', parseError.message);
+      console.error('📋 Raw result that failed to parse:', resultText);
       
       // Create a manual fallback result
       const fallbackResult = {
         original: sentence,
         corrected: sentence,
         isCorrect: true,
-        explanation: "Unable to provide detailed analysis. The sentence appears acceptable.",
+        explanation: "I couldn't provide a detailed analysis, but your sentence appears to be acceptable. Please try again for more detailed feedback.",
         errors: [],
         score: 75,
-        tips: ["Keep practicing!", "Try submitting another sentence"]
+        tips: ["Keep practicing!", "Try submitting another sentence for analysis"]
       };
       
       return new Response(JSON.stringify(fallbackResult), {
@@ -177,11 +178,11 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
       });
     }
   } catch (error) {
-    console.error('Error in correct-sentence function:', error);
+    console.error('💥 Critical error in correct-sentence function:', error);
     
     return new Response(JSON.stringify({
       error: 'Service temporarily unavailable. Please try again.',
-      details: error.message
+      details: `System error: ${error.message}`
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

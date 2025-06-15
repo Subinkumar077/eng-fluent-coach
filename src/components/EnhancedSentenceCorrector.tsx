@@ -56,28 +56,28 @@ const EnhancedSentenceCorrector = () => {
     setResult(null);
     
     try {
-      console.log('Sending sentence for correction:', sentence);
+      console.log('🔄 Sending sentence for correction:', sentence);
       
       const { data, error: functionError } = await supabase.functions.invoke('correct-sentence', {
         body: { sentence: sentence.trim() }
       });
 
-      console.log('Function response:', data);
-      console.log('Function error:', functionError);
+      console.log('📨 Function response data:', data);
+      console.log('⚠️ Function error:', functionError);
 
       if (functionError) {
-        console.error('Supabase function error:', functionError);
-        throw new Error('Connection to AI service failed. Please check your internet connection and try again.');
+        console.error('🚨 Supabase function error:', functionError);
+        throw new Error('Connection failed. Please check your internet connection and try again.');
       }
 
       if (data && data.error) {
-        console.error('Function returned error:', data.error);
+        console.error('❌ Function returned error:', data.error, data.details);
         throw new Error(data.error);
       }
 
       if (!data || !data.original) {
-        console.error('Invalid response from function:', data);
-        throw new Error('Invalid response from AI service. Please try again.');
+        console.error('⚠️ Invalid response format:', data);
+        throw new Error('Invalid response received. Please try again.');
       }
 
       setResult(data);
@@ -95,7 +95,7 @@ const EnhancedSentenceCorrector = () => {
         });
 
         if (dbError) {
-          console.error('Database error:', dbError);
+          console.error('📝 Database error:', dbError);
         }
 
         // Add daily activity points
@@ -107,20 +107,21 @@ const EnhancedSentenceCorrector = () => {
         });
 
         if (activityError && activityError.code !== '23505') {
-          console.error('Activity tracking error:', activityError);
+          console.error('📊 Activity tracking error:', activityError);
         }
 
         toast({
-          title: "Sentence Analyzed!",
+          title: "Analysis Complete!",
           description: `You earned ${points} points for this correction.`,
         });
       } catch (dbError) {
-        console.error('Database operation failed:', dbError);
+        console.error('💾 Database operation failed:', dbError);
+        // Don't show error to user since the main function worked
       }
 
     } catch (error: any) {
-      console.error('Error in sentence correction:', error);
-      const errorMessage = error.message || "AI service is temporarily unavailable. Please try again in a moment.";
+      console.error('💥 Error in sentence correction:', error);
+      const errorMessage = error.message || "Service temporarily unavailable. Please try again.";
       setError(errorMessage);
       
       toast({
@@ -199,14 +200,17 @@ const EnhancedSentenceCorrector = () => {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {error}
-              <div className="mt-2 text-sm">
-                If this problem persists, please try:
-                <ul className="list-disc list-inside mt-1">
-                  <li>Checking your internet connection</li>
-                  <li>Refreshing the page</li>
-                  <li>Trying again in a few minutes</li>
-                </ul>
+              <div className="space-y-2">
+                <p>{error}</p>
+                <div className="text-sm">
+                  <p className="font-medium">Troubleshooting tips:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Check your internet connection</li>
+                    <li>Try a shorter sentence</li>
+                    <li>Refresh the page and try again</li>
+                    <li>Contact support if the problem persists</li>
+                  </ul>
+                </div>
               </div>
             </AlertDescription>
           </Alert>
