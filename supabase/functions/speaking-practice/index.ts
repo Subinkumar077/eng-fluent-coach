@@ -17,10 +17,32 @@ serve(async (req) => {
   try {
     console.log('✅ Received request to speaking-practice function');
     
-    const { topic, conversation, userMessage } = await req.json();
+    const body = await req.json();
+    const { topic, conversation, userMessage } = body;
     console.log('📝 Topic:', topic);
     console.log('📝 User message:', userMessage);
     console.log('📝 Conversation length:', conversation ? conversation.length : 0);
+    
+    // Validate required inputs
+    if (!userMessage || userMessage.trim().length === 0) {
+      console.log('❌ No user message provided');
+      return new Response(JSON.stringify({ 
+        error: 'Message is required for conversation practice.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!topic || topic.trim().length === 0) {
+      console.log('❌ No topic provided');
+      return new Response(JSON.stringify({ 
+        error: 'Topic is required for conversation practice.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     if (!geminiApiKey) {
       console.log('🚨 Gemini API key not found');
@@ -32,7 +54,7 @@ serve(async (req) => {
       });
     }
 
-    const conversationHistory = conversation || [];
+    const conversationHistory = Array.isArray(conversation) ? conversation : [];
     const prompt = `You are an English conversation partner helping a student practice speaking. 
 
 Topic: ${topic}
@@ -78,8 +100,23 @@ Response:`;
       const errorText = await response.text();
       console.error('❌ Gemini API error:', response.status, errorText);
       
+      let errorMessage = 'AI service temporarily unavailable. Please try again.';
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error && errorData.error.message) {
+          console.error('🔍 Detailed error:', errorData.error.message);
+          if (errorData.error.message.includes('API key')) {
+            errorMessage = 'Invalid API key configuration. Please check your Gemini API key.';
+          } else if (errorData.error.message.includes('quota')) {
+            errorMessage = 'API quota exceeded. Please try again later.';
+          }
+        }
+      } catch (parseError) {
+        console.error('❌ Could not parse error response:', parseError);
+      }
+      
       return new Response(JSON.stringify({ 
-        error: 'AI service temporarily unavailable. Please try again.',
+        error: errorMessage,
         details: `API responded with status: ${response.status}`
       }), {
         status: 500,
@@ -88,7 +125,7 @@ Response:`;
     }
 
     const data = await response.json();
-    console.log('📊 Gemini API response structure:', JSON.stringify(data, null, 2));
+    console.log('📊 Gemini API response received');
     
     // Check if response has the expected structure
     if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
@@ -103,14 +140,27 @@ Response:`;
       });
     }
 
-    const aiResponseText = data.candidates[0]?.content?.parts?.[0]?.text;
-    
-    if (!aiResponseText) {
-      console.error('❌ No text content in Gemini response');
+    const candidate = data.candidates[0];
+    if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      console.error('❌ No content in Gemini response candidate');
       
       return new Response(JSON.stringify({
         error: 'No response generated. Please try again.',
         details: 'Empty response content'
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const aiResponseText = candidate.content.parts[0].text;
+    
+    if (!aiResponseText || aiResponseText.trim().length === 0) {
+      console.error('❌ Empty text content in Gemini response');
+      
+      return new Response(JSON.stringify({
+        error: 'No response generated. Please try again.',
+        details: 'Empty response text'
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,6 +181,7 @@ Response:`;
       response: aiResponse,
       conversation: updatedConversation
     }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
