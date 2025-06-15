@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, XCircle, Lightbulb, BookOpen, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Lightbulb, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -29,64 +29,103 @@ const EnhancedSentenceCorrector = () => {
   const [sentence, setSentence] = useState('');
   const [result, setResult] = useState<CorrectionResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   const correctSentence = async () => {
-    if (!sentence.trim() || !user) return;
+    if (!sentence.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a sentence to check.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please sign in to use this feature.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setLoading(true);
+    setError(null);
+    
     try {
-      const { data, error } = await supabase.functions.invoke('correct-sentence', {
+      console.log('Sending sentence for correction:', sentence);
+      
+      const { data, error: functionError } = await supabase.functions.invoke('correct-sentence', {
         body: { sentence: sentence.trim() }
       });
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw new Error('Failed to analyze sentence. Please try again.');
+      console.log('Function response:', data);
+      console.log('Function error:', functionError);
+
+      if (functionError) {
+        console.error('Supabase function error:', functionError);
+        throw new Error('Failed to connect to the correction service. Please try again.');
       }
 
-      if (data.error) {
+      if (data && data.error) {
         throw new Error(data.error);
       }
 
+      if (!data || !data.original) {
+        throw new Error('Invalid response from correction service. Please try again.');
+      }
+
       setResult(data);
+      setError(null);
 
-      // Save correction to database
-      const { error: dbError } = await supabase.from('sentence_corrections').insert({
-        user_id: user.id,
-        original_sentence: sentence,
-        corrected_sentence: data.corrected,
-        explanation: data.explanation,
-        errors: data.errors,
-        score: data.score
-      });
+      // Save correction to database if successful
+      try {
+        const { error: dbError } = await supabase.from('sentence_corrections').insert({
+          user_id: user.id,
+          original_sentence: sentence,
+          corrected_sentence: data.corrected,
+          explanation: data.explanation,
+          errors: data.errors,
+          score: data.score
+        });
 
-      if (dbError) {
-        console.error('Database error:', dbError);
+        if (dbError) {
+          console.error('Database error:', dbError);
+          // Don't throw here, just log the error
+        }
+
+        // Add daily activity points
+        const points = data.isCorrect ? 5 : 10;
+        const { error: activityError } = await supabase.from('daily_activities').insert({
+          user_id: user.id,
+          activity_type: 'sentence_correction',
+          points_earned: points
+        });
+
+        if (activityError && activityError.code !== '23505') {
+          console.error('Activity tracking error:', activityError);
+          // Don't throw here, just log the error
+        }
+
+        toast({
+          title: "Sentence Analyzed!",
+          description: `You earned ${points} points for this correction.`,
+        });
+      } catch (dbError) {
+        console.error('Database operation failed:', dbError);
+        // Don't prevent the user from seeing results even if DB operations fail
       }
-
-      // Add daily activity points
-      const points = data.isCorrect ? 5 : 10; // More points for learning from mistakes
-      const { error: activityError } = await supabase.from('daily_activities').insert({
-        user_id: user.id,
-        activity_type: 'sentence_correction',
-        points_earned: points
-      });
-
-      if (activityError && activityError.code !== '23505') { // Ignore duplicate key errors
-        console.error('Activity tracking error:', activityError);
-      }
-
-      toast({
-        title: "Sentence Analyzed!",
-        description: `You earned ${points} points for this correction.`,
-      });
 
     } catch (error: any) {
       console.error('Error in sentence correction:', error);
+      const errorMessage = error.message || "Failed to analyze sentence. Please try again.";
+      setError(errorMessage);
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to analyze sentence. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -121,14 +160,37 @@ const EnhancedSentenceCorrector = () => {
           />
           <Button
             onClick={correctSentence}
-            disabled={loading || !sentence.trim()}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            disabled={loading || !sentence.trim() || !user}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
           >
-            {loading ? 'Analyzing...' : 'Check My Sentence'}
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              'Check My Sentence'
+            )}
           </Button>
+          
+          {!user && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Please sign in to use the sentence corrector feature.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
-        {result && (
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {result && !error && (
           <div className="space-y-4">
             {/* Score and Status */}
             <div className="flex items-center justify-between">
@@ -172,7 +234,7 @@ const EnhancedSentenceCorrector = () => {
             </Alert>
 
             {/* Specific Errors */}
-            {result.errors.length > 0 && (
+            {result.errors && result.errors.length > 0 && (
               <div className="space-y-3">
                 <h4 className="font-medium text-gray-700 dark:text-gray-300">Specific Issues Found:</h4>
                 {result.errors.map((error, index) => (
@@ -197,7 +259,7 @@ const EnhancedSentenceCorrector = () => {
             )}
 
             {/* Tips */}
-            {result.tips.length > 0 && (
+            {result.tips && result.tips.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-medium text-gray-700 dark:text-gray-300">💡 Tips for Improvement:</h4>
                 <ul className="space-y-1">
