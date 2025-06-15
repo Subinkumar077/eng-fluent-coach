@@ -69,7 +69,8 @@ Respond with ONLY a valid JSON object in this exact format:
 
 If the sentence is perfect, set isCorrect to true and errors to an empty array.`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`;
+    // Updated to use the current Gemini model name
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
     console.log('🌐 Request URL (without key):', geminiUrl.replace(geminiApiKey, '[API_KEY]'));
 
     const requestBody = {
@@ -113,6 +114,8 @@ If the sentence is perfect, set isCorrect to true and errors to an empty array.`
             errorMessage = 'Invalid API key configuration. Please check your Gemini API key.';
           } else if (errorData.error.message.includes('quota')) {
             errorMessage = 'API quota exceeded. Please try again later.';
+          } else if (errorData.error.message.includes('not found')) {
+            errorMessage = 'AI model temporarily unavailable. Please try again later.';
           }
         }
       } catch (parseError) {
