@@ -94,7 +94,7 @@ const Index = () => {
         {/* Welcome Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Welcome back, {userProfile?.username || user.email?.split('@')[0]}! 🎯
+            Welcome, {userProfile?.username || user.email?.split('@')[0]}! 🎯
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
             Ready to improve your English today? Let's continue your learning journey.
